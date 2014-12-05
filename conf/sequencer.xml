@@ -9,7 +9,11 @@
         xmlns="urn:org:jgroups"
         xsi:schemaLocation="urn:org:jgroups http://www.jgroups.org/schema/jgroups.xsd">
     <UDP/>
-    <PING/>
+    <--!<PING/>-->
+    <FILE_PING
+            timeout="2000"
+            num_initial_members="20"
+            location="/home/pg/p13/a6915654/"/>
     <MERGE3/>
     <FD_SOCK/>
     <FD_ALL/>
@@ -21,8 +25,8 @@
     <pbcast.GMS/>
     <UFC/>
     <MFC/>
-    <!-- SEQUENCER could also be placed just under GMS, if messages and views need to be totally ordered -->
-    <SEQUENCER />
+    <!-- ZAB could also be placed just under GMS, if messages and views need to be totally ordered -->
+    <jzookeeper.ZAB/>
     <FRAG2/>
     <pbcast.STATE_TRANSFER />
 </config>

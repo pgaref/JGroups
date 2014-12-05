@@ -58,7 +58,7 @@ public class Chat extends ReceiverAdapter {
 
 
     public static void main(String[] args) throws Exception {
-        String props="udp.xml";
+        String props="udp_sequence.xml";
         String name=null;
 
         for(int i=0; i < args.length; i++) {
