@@ -1,6 +1,10 @@
 package org.jgroups.protocols.jzookeeper;
 
 
+import java.io.BufferedWriter;
+import java.io.FileWriter;
+import java.io.IOException;
+import java.io.PrintWriter;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Calendar;
@@ -31,7 +35,7 @@ import org.jgroups.util.MessageBatch;
 
 public class MMZAB extends Protocol {
 	
-	protected final AtomicLong        zxid=new AtomicLong(0);
+	protected  AtomicLong        zxid=new AtomicLong(0);
     private ExecutorService executor;
     protected Address                           local_addr;
     protected volatile Address                  leader;
@@ -49,6 +53,8 @@ public class MMZAB extends Protocol {
 	Calendar cal = Calendar.getInstance();
     protected volatile boolean                  running=true;
     private int index=-1;
+    private  Map<Long, String> time = new HashMap<Long, String>();
+
     
     public MMZAB(){
     	
@@ -206,6 +212,10 @@ public class MMZAB extends Protocol {
     	return zxid.incrementAndGet();
     }
 
+    private void clearZxid(){
+        zxid = new AtomicLong(0);
+    }
+    
     private void forwardToLeader(Message msg) {
 	   ZABHeader hdrReq = (ZABHeader) msg.getHeader(this.id);
 	   requestQueue.add(hdrReq.getMessageId());
@@ -261,6 +271,8 @@ public class MMZAB extends Protocol {
 			outstandingProposals.put(hdr.getZxid(), p);
 			lastZxidProposed = hdr.getZxid();
 			queuedProposalMessage.put(hdr.getZxid(), hdr);
+			String tim = "pt"+" " + System.currentTimeMillis()+" ";
+        	time.put(hdr.getZxid(), tim);
 //		}
 //		else{
 //			p = outstandingProposals.get(hdr.getZxid());
@@ -295,6 +307,9 @@ public class MMZAB extends Protocol {
 	    Proposal p = null;
     	ZABHeader hdr = (ZABHeader) msgACK.getHeader(this.id);	
     	long ackZxid = hdr.getZxid();
+    	String tim = time.remove(ackZxid);
+    	tim = tim + System.currentTimeMillis()+" ";
+    	time.put(ackZxid, tim);
 //    	if (!(outstandingProposals.containsKey(hdr.getZxid())) && (lastZxidProposed < hdr.getZxid())){
 //			p = new Proposal();
 //	        outstandingProposals.put(hdr.getZxid(), p); 
@@ -360,11 +375,10 @@ public class MMZAB extends Protocol {
 			
 	       	//log.info("[" + local_addr + "] "+"About to commit the request (commit) for zxid="+zxid+" "+getCurrentTimeStamp());
 
-		    ZABHeader hdrOrginal = null;
 	    	   synchronized(this){
 	    	       lastZxidCommitted = zxid;
 	    	   }
-		   hdrOrginal = queuedProposalMessage.get(zxid);
+	    	   ZABHeader hdrOrginal = queuedProposalMessage.get(zxid);
 		   if (hdrOrginal == null){
 			   log.info("!!!!!!!!!!!!!!!!!!!!!!!!!!!! Header is null (commit)"+ hdrOrginal + " for zxid "+zxid);
 			   return;
@@ -394,7 +408,7 @@ public class MMZAB extends Protocol {
 			}
 	    	queuedCommitMessage.put(zxid, hdrOrginal);
 			 log.info("queuedCommitMessage size = " + queuedCommitMessage.size() + " zxid "+zxid);
-
+			
 	    	if (requestQueue.contains(hdrOrginal.getMessageId())){
 	    		//log.info("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!I am the zab request receiver, going to send response back to " + hdrOrginal.getMessageId().getAddress());
 		    	ZABHeader hdrResponse = new ZABHeader(ZABHeader.RESPONSE, zxid,  hdrOrginal.getMessageId());
@@ -402,10 +416,31 @@ public class MMZAB extends Protocol {
 	       		down_prot.down(new Event(Event.MSG, msgResponse));     
 
 	    	}
-	    	
-	    	   
+	    	 if(queuedCommitMessage.size()>=1050000)
+				 printTimeToFile();    	   
 	   }
 		
+    private void printTimeToFile(){
+    	PrintWriter outFile  = null;
+    	try {
+			 outFile = new PrintWriter(new BufferedWriter(new FileWriter("/work/times.log",true)));
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+    	
+    	for(String t : time.values())
+    		outFile.println(t);
+    	
+    	outFile.close();
+    	outstandingProposals.clear();
+    	queuedCommitMessage.clear();  
+        queuedProposalMessage.clear();
+        clearZxid();
+        lastZxidProposed=0;
+        lastZxidCommitted=0;
+ 
+    }
 		
     private void handleOrderingResponse(ZABHeader hdrResponse) {
 			
@@ -498,6 +533,8 @@ public class MMZAB extends Protocol {
             	//log.info("Zxid count for zxid = " + new_zxid + " count = "  +p.AckCount+" "+getCurrentTimeStamp());
             	outstandingProposals.put(new_zxid, p);
             	queuedProposalMessage.put(new_zxid, hdrProposal);
+            	String tim = "pt"+" " + System.currentTimeMillis()+" ";
+            	time.put(new_zxid, tim);
             	
             	
             	
