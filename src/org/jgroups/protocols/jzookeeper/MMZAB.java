@@ -271,7 +271,7 @@ public class MMZAB extends Protocol {
 			outstandingProposals.put(hdr.getZxid(), p);
 			lastZxidProposed = hdr.getZxid();
 			queuedProposalMessage.put(hdr.getZxid(), hdr);
-			String tim = "pt"+" " + System.currentTimeMillis()+" ";
+			String tim = hdr.getZxid()+" " + System.currentTimeMillis()+" ";
         	time.put(hdr.getZxid(), tim);
 //		}
 //		else{
@@ -423,7 +423,7 @@ public class MMZAB extends Protocol {
     private void printTimeToFile(){
     	PrintWriter outFile  = null;
     	try {
-			 outFile = new PrintWriter(new BufferedWriter(new FileWriter("/work/times.log",true)));
+			 outFile = new PrintWriter(new BufferedWriter(new FileWriter("/work/timess.log",true)));
 		} catch (IOException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
@@ -533,7 +533,7 @@ public class MMZAB extends Protocol {
             	//log.info("Zxid count for zxid = " + new_zxid + " count = "  +p.AckCount+" "+getCurrentTimeStamp());
             	outstandingProposals.put(new_zxid, p);
             	queuedProposalMessage.put(new_zxid, hdrProposal);
-            	String tim = "pt"+" " + System.currentTimeMillis()+" ";
+            	String tim = new_zxid+" " +  System.currentTimeMillis()+" ";
             	time.put(new_zxid, tim);
             	
             	
