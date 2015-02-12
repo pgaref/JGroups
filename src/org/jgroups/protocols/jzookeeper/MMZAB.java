@@ -12,6 +12,7 @@ import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -54,6 +55,8 @@ public class MMZAB extends Protocol {
     protected volatile boolean                  running=true;
     private int index=-1;
     private  Map<Long, String> time = new HashMap<Long, String>();
+	List<String> ZxidAndTime = new LinkedList<String>();
+
 
     
     public MMZAB(){
@@ -271,8 +274,9 @@ public class MMZAB extends Protocol {
 			outstandingProposals.put(hdr.getZxid(), p);
 			lastZxidProposed = hdr.getZxid();
 			queuedProposalMessage.put(hdr.getZxid(), hdr);
-			String tim = hdr.getZxid()+" " + System.currentTimeMillis()+" ";
-        	time.put(hdr.getZxid(), tim);
+//			String tim = hdr.getZxid()+" " + System.currentTimeMillis()+" ";
+//        	time.put(hdr.getZxid(), tim);
+        	ZxidAndTime.add(hdr.getZxid()+" "+System.currentTimeMillis());
 //		}
 //		else{
 //			p = outstandingProposals.get(hdr.getZxid());
@@ -307,9 +311,9 @@ public class MMZAB extends Protocol {
 	    Proposal p = null;
     	ZABHeader hdr = (ZABHeader) msgACK.getHeader(this.id);	
     	long ackZxid = hdr.getZxid();
-    	String tim = time.remove(ackZxid);
-    	tim = tim + System.currentTimeMillis()+" ";
-    	time.put(ackZxid, tim);
+//    	String tim = time.remove(ackZxid);
+//    	tim = tim + System.currentTimeMillis()+" ";
+//    	time.put(ackZxid, tim);
 //    	if (!(outstandingProposals.containsKey(hdr.getZxid())) && (lastZxidProposed < hdr.getZxid())){
 //			p = new Proposal();
 //	        outstandingProposals.put(hdr.getZxid(), p); 
@@ -416,29 +420,29 @@ public class MMZAB extends Protocol {
 	       		down_prot.down(new Event(Event.MSG, msgResponse));     
 
 	    	}
-	    	 if(queuedCommitMessage.size()>=1050000)
+	    	 if(queuedCommitMessage.size()>=35000)
 				 printTimeToFile();    	   
 	   }
 		
     private void printTimeToFile(){
-    	PrintWriter outFile  = null;
-    	try {
-			 outFile = new PrintWriter(new BufferedWriter(new FileWriter("/work/timess.log",true)));
-		} catch (IOException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
+//    	PrintWriter outFile  = null;
+//    	try {
+//			 outFile = new PrintWriter(new BufferedWriter(new FileWriter("/work/timess.log",true)));
+//		} catch (IOException e) {
+//			// TODO Auto-generated catch block
+//			e.printStackTrace();
+//		}
     	
-    	for(String t : time.values())
-    		outFile.println(t);
+    	//for(String t : ZxidAndTime)
+    		log.info("zxid and Time "+ZxidAndTime);;
     	
-    	outFile.close();
-    	outstandingProposals.clear();
-    	queuedCommitMessage.clear();  
-        queuedProposalMessage.clear();
-        clearZxid();
-        lastZxidProposed=0;
-        lastZxidCommitted=0;
+//    	outFile.close();
+//    	outstandingProposals.clear();
+//    	queuedCommitMessage.clear();  
+//        queuedProposalMessage.clear();
+//        clearZxid();
+//        lastZxidProposed=0;
+//        lastZxidCommitted=0;
  
     }
 		
@@ -533,8 +537,10 @@ public class MMZAB extends Protocol {
             	//log.info("Zxid count for zxid = " + new_zxid + " count = "  +p.AckCount+" "+getCurrentTimeStamp());
             	outstandingProposals.put(new_zxid, p);
             	queuedProposalMessage.put(new_zxid, hdrProposal);
-            	String tim = new_zxid+" " +  System.currentTimeMillis()+" ";
-            	time.put(new_zxid, tim);
+//            	String tim = new_zxid+" " +  System.currentTimeMillis()+" ";
+//            	time.put(new_zxid, tim);
+            	ZxidAndTime.add(new_zxid+" "+System.currentTimeMillis());
+
             	
             	
             	
