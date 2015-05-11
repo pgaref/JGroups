@@ -11,7 +11,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ArrayBlockingQueue;
-import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.ExecutorService;
@@ -30,27 +29,27 @@ import org.jgroups.util.MessageBatch;
 
 public class ZAB extends Protocol {
 	
-	protected final AtomicLong                  zxid=new AtomicLong(0);
+	private final AtomicLong                  zxid=new AtomicLong(0);
     private ExecutorService                     executor;
-    protected Address                           local_addr;
-    protected volatile Address                  leader;
+    private Address                           local_addr;
+    private volatile Address                  leader;
     private int QUEUE_CAPACITY = 500;
-    protected volatile View                     view;
-    protected volatile boolean                  is_leader=false;
+    private volatile View                     view;
+    private volatile boolean                  is_leader=false;
     private List<Address>                       zabMembers = Collections.synchronizedList(new ArrayList<Address>());
 	private long                                lastZxidProposed=0, lastZxidCommitted=0;
     private final Set<MessageId>                requestQueue =Collections.synchronizedSet(new HashSet<MessageId>());
-	private Map<Long, ZABHeader>                queuedCommitMessage = Collections.synchronizedMap(new HashMap<Long, ZABHeader>());
-    private final Map<Long, ZABHeader> queuedProposalMessage = Collections.synchronizedMap(new HashMap<Long, ZABHeader>());
-   // private final LinkedBlockingQueue<ZABHeader> queuedMessages =
-	       // new LinkedBlockingQueue<ZABHeader>();
-    private final BlockingQueue<ZABHeader> queuedMessages = new ArrayBlockingQueue<ZABHeader>(QUEUE_CAPACITY);
+	private Map<Long, ZABHeader> queuedCommitMessage = new HashMap<Long, ZABHeader>();
 
+    private final Map<Long, ZABHeader> queuedProposalMessage = Collections.synchronizedMap(new HashMap<Long, ZABHeader>());
+    private final LinkedBlockingQueue<ZABHeader> queuedMessages =
+	        new LinkedBlockingQueue<ZABHeader>();
 	private ConcurrentMap<Long, Proposal> outstandingProposals = new ConcurrentHashMap<Long, Proposal>();
     private final Map<MessageId, Message> messageStore = Collections.synchronizedMap(new HashMap<MessageId, Message>());
     private Calendar cal = Calendar.getInstance();
     private int index=-1;
-    protected volatile boolean                  running=true;
+    private volatile boolean                  running=true;
+    
  
     public ZAB(){
     	
@@ -174,13 +173,15 @@ public class ZAB extends Protocol {
  	  
     	if (clientHeader!=null && clientHeader.getType() == ZABHeader.START_SENDING){
     		for (Address client : view.getMembers()){
-    	 	    log.info("Address to check " + client);
+    			if(log.isDebugEnabled())
+    				log.info("Address to check " + client);
         		if (!zabMembers.contains(client)){
-        	 	    log.info("Address to check is not zab Members, will send start request to" + client+ " "+ getCurrentTimeStamp());
+        			if(log.isDebugEnabled())
+        				log.info("Address to check is not zab Members, will send start request to" + client+ " "+ getCurrentTimeStamp());
         			message.setDest(client);
         	        down_prot.down(new Event(Event.MSG, message));    	
         		}
-    	}
+    		}
     	}
     	else if(!clientHeader.getMessageId().equals(null)){
 	    	 Address destination = null;
@@ -263,12 +264,12 @@ public class ZAB extends Protocol {
     	if (hdr == null)
     		return;
     	
-    	if (hdr.getZxid() != lastZxidProposed + 1){
+    	//if (hdr.getZxid() != lastZxidProposed + 1){
 //            log.info("Got zxid 0x"
 //                    + Long.toHexString(hdr.getZxid())
 //                    + " expected 0x"
 //                    + Long.toHexString(lastZxidProposed + 1));
-        }
+        //}
     	
     	lastZxidProposed = hdr.getZxid();
     	queuedProposalMessage.put(hdr.getZxid(), hdr);
@@ -285,7 +286,7 @@ public class ZAB extends Protocol {
     }
     
     
-    private void processACK(Message msgACK, Address sender){
+    private synchronized void processACK(Message msgACK, Address sender){
 	   
     	ZABHeader hdr = (ZABHeader) msgACK.getHeader(this.id);	
     	long ackZxid = hdr.getZxid();
@@ -310,25 +311,23 @@ public class ZAB extends Protocol {
 			
 		}
 		
-    private synchronized void commit(long zxidd){
+    private void commit(long zxidd){
 	    ZABHeader hdrOrg = queuedProposalMessage.get(zxidd);
    	    //log.info("Czxid = "+ hdrOrg.getZxid() + " " + getCurrentTimeStamp());
-		   ZABHeader hdrOrginal = null;
 	       synchronized(this){
 	    	   lastZxidCommitted = zxidd;
 	       }
 
-		   hdrOrginal = queuedProposalMessage.get(zxidd);
-		   if (hdrOrginal == null){
-			   log.info("??????????????????????????? Header is null (commit)"+ hdrOrginal + " for zxid "+zxidd);
+		   if (hdrOrg == null){
+			   log.info("??????????????????????????? Header is null (commit)"+ hdrOrg + " for zxid "+zxidd);
 			   return;
 		   }
-   	       MessageId mid = hdrOrginal.getMessageId();
+   	       //MessageId mid = hdrOrg.getMessageId();
 //		   if (mid == null){
 //			   log.info("%%%%%%%%%%%%%%%%%%%%%%%%%%% Message is null (commit)"+ mid + " for zxid "+zxidd);
 //			   return;
 //		   }
-	       ZABHeader hdrCommit = new ZABHeader(ZABHeader.COMMIT, zxidd, mid);
+	       ZABHeader hdrCommit = new ZABHeader(ZABHeader.COMMIT, zxidd);
 	       Message commitMessage = new Message().putHeader(this.id, hdrCommit);	       
            for (Address address : zabMembers) {
 //        	   if (address.equals(leader)){
@@ -343,7 +342,7 @@ public class ZAB extends Protocol {
 
 	    }
 		
-    private synchronized void deliver(Message toDeliver){
+    private void deliver(Message toDeliver){
 		//ZABHeader hdrOrginal = null;
 		ZABHeader hdr = (ZABHeader) toDeliver.getHeader(this.id);
 		long zxid = hdr.getZxid();
@@ -354,7 +353,8 @@ public class ZAB extends Protocol {
 		//log.info("Dzxid = "+ hdr.getZxid() + " " + getCurrentTimeStamp());
 		ZABHeader hdrOrginal = queuedProposalMessage.remove(zxid);
 		if (hdrOrginal == null) {
-			log.info("$$$$$$$$$$$$$$$$$$$$$ Header is null (deliver)"
+			 if (log.isInfoEnabled())
+				 log.info("$$$$$$$$$$$$$$$$$$$$$ Header is null (deliver)"
 					+ hdrOrginal + " for zxid " + hdr.getZxid());
 			return;
 		}
@@ -362,7 +362,8 @@ public class ZAB extends Protocol {
 //				+ requestQueue.contains(hdrOrginal.getMessageId()));
 
 		queuedCommitMessage.put(zxid, hdrOrginal);
-		 log.info("queuedCommitMessage size = " + queuedCommitMessage.size() + " zxid "+zxid);
+		if (log.isInfoEnabled())
+			log.info("queuedCommitMessage size = " + queuedCommitMessage.size() + " zxid "+zxid);
 		if (requestQueue.contains(hdrOrginal.getMessageId())) {
 			//log.info("I am the zab request receiver, "+ hdr.getZxid());
 					//+ hdrOrginal.getMessageId().getAddress());

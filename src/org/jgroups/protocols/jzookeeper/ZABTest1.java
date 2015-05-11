@@ -179,7 +179,7 @@ private long getStartTime(){
 
 public static void main(String[] args) {
     String props="conf/sequencer.xml", name="ZAB";
-     final ZABTest test=new ZABTest();
+     final ZABTest1 test=new ZABTest1();
     try {
         //test.start(props, name);
         test.loop();
@@ -250,11 +250,11 @@ public class Sender extends Thread {
     private final byte[]        payload;
     private final long    numsMsg;
     private final int    msgSize;   
-    private ZABTest zt = null;
+    private ZABTest1 zt = null;
     JChannel channel = null;
 
 
-    protected Sender(CyclicBarrier barrier, AtomicLong seq, byte[] payload, long numsMsg, int msgSize, ZABTest at) {
+    protected Sender(CyclicBarrier barrier, AtomicLong seq, byte[] payload, long numsMsg, int msgSize, ZABTest1 at) {
         this.barrier=barrier;
         this.seq = seq;
         this.payload=payload;

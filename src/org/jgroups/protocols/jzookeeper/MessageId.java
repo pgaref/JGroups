@@ -20,12 +20,19 @@ public class MessageId implements Externalizable, Comparable<MessageId>, Cloneab
     private static final long serialVersionUID = 878801547232534461L;
     private Address address = null;
     private long id = -1;
+    private long startSend = 0;
 
     public MessageId() {}
 
     public MessageId(Address address, long id) {
         this.address = address;
         this.id = id;
+    }
+    
+    public MessageId(Address address, long id, long startSend) {
+        this.address = address;
+        this.id = id;
+        this.startSend = startSend;
     }
 
     @Override
@@ -42,7 +49,15 @@ public class MessageId implements Externalizable, Comparable<MessageId>, Cloneab
     public Address getAddress() {
         return address;
     }
+    
+    public long getStartTime(){
+    	return startSend;
+    }
 
+    public void setStartTime(long startSend){
+    	this.startSend = startSend;
+    }
+    
     @Override
     public String toString() {
         return "MessageId{" + address + ":" + id + "}";
@@ -78,19 +93,21 @@ public class MessageId implements Externalizable, Comparable<MessageId>, Cloneab
     }
 
     public int serializedSize() {
-        return Bits.size(id) + Util.size(address);
+        return Bits.size(id) + Util.size(address) + Bits.size(startSend) ;
     }
 
     @Override
     public void writeTo(DataOutput out) throws Exception {
         Util.writeAddress(address, out);
         Bits.writeLong(id, out);
+        Bits.writeLong(startSend, out);
     }
 
     @Override
     public void readFrom(DataInput in) throws Exception {
         address = Util.readAddress(in);
         id = Bits.readLong(in);
+        startSend = Bits.readLong(in);
     }
 
     @Override
