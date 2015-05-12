@@ -208,11 +208,12 @@ public class ZABTestThreads extends ReceiverAdapter {
 		}
 		outFile.println("Sender " + sender.getName()+ " Finished "+
 				numOpsRecieved + " Throughput per sender "+(numOpsRecieved/TimeUnit.MILLISECONDS.toSeconds(timeElapsed))+" ops/sec"
-				+" /Latency-----> Min = " + min + " /Avg = "+ (avg/latencies.size())+
+				+" /Latency-----> /Min = " + min + " /Avg = "+ (avg/latencies.size())+
 		        " /Max = " +max);
 		if (numsThreadFinished >= num_threads){
 			avgTimeElpased/=numsThreadFinished;
 			outFile.println("Throughput Per Client " +(avgRecievedOps/TimeUnit.MILLISECONDS.toSeconds(avgTimeElpased))+" ops/sec");
+      outFile.println("Throughput Recieved in this Client " +(avgRecievedOps));
 			outFile.println("Throughput All Cluster " +((avgRecievedOps*numOfClients)/TimeUnit.MILLISECONDS.toSeconds(avgTimeElpased))
 					+" ops/sec");
 		    outFile.println("Test Generated at "+ new Date()+ " Lasted for " + TimeUnit.MILLISECONDS.toSeconds(avgTimeElpased)); 

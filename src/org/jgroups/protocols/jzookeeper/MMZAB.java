@@ -4,6 +4,7 @@ package org.jgroups.protocols.jzookeeper;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Calendar;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashMap;
@@ -32,10 +33,7 @@ import org.jgroups.View;
 import org.jgroups.annotations.ManagedAttribute;
 import org.jgroups.stack.Protocol;
 import org.jgroups.util.MessageBatch;
-/*
- * Modify of ZAB
- * 
- */
+
 public class MMZAB extends Protocol {
 	// d
 	protected final AtomicLong        zxid=new AtomicLong(0);
@@ -56,19 +54,11 @@ public class MMZAB extends Protocol {
 	Calendar cal = Calendar.getInstance();
     protected volatile boolean                  running=true;
     private int index=-1;
-    //private Map<Long, Boolean> notACK = new HashMap<Long, Boolean>();
     SortedSet<Long> wantCommit = new TreeSet<Long>();
-    private long lastRequestRecieved;
-    private Timer _timer;
-    private boolean startSending = false;
-    private boolean makeAllFollowersAck = false;
-    private boolean ackActiveForAll = false;
+    private boolean BUNDLE_MSGS = true;
+    private int MSG_SIZE = 500;
 
 
-    
-
-
-    
     public MMZAB(){
     	
     }
@@ -89,16 +79,16 @@ public class MMZAB extends Protocol {
     }
     // For sending Dummy request
     
-    class FinishTask extends TimerTask {
-    	private short idd;
-    	public FinishTask(short id){
-    		this.idd = id;
-    	}
-		@Override
-		public void run() {
-			//this can be used to measure rate of each thread
-			//at this moment, it is not necessary
-			long currentTime = System.currentTimeMillis();
+//    class FinishTask extends TimerTask {
+//    	private short idd;
+//    	public FinishTask(short id){
+//    		this.idd = id;
+//    	}
+//		@Override
+//		public void run() {
+//			//this can be used to measure rate of each thread
+//			//at this moment, it is not necessary
+//			long currentTime = System.currentTimeMillis();
 			//log.info("cccccccall FinishTask diff time "+(currentTime - timeDiff));
 //			if (outstandingProposals.isEmpty()){
 //				this.cancel();
@@ -109,20 +99,21 @@ public class MMZAB extends Protocol {
 //				return;
 //			}
 			
-			if (!outstandingProposals.isEmpty() && (currentTime - lastRequestRecieved) >500) {
-        		this.cancel();
-				log.info("Comit Alllllllllllllllllllllllllllllllllll");
-    			ZABHeader commitPending = new ZABHeader(ZABHeader.COMMITOUTSTANDINGREQUESTS);
-				for (Address address : zabMembers) {
-                    Message commitALL = new Message(address).putHeader(this.idd, commitPending);
-            		down_prot.down(new Event(Event.MSG, commitALL));     
-                }
-				ackActiveForAll=true;
-				
-				//startSending=false;
-			}
-		}
-	}
+//			if (!outstandingProposals.isEmpty() && (currentTime - lastRequestRecieved) >500) {
+//        		this.cancel();
+//				log.info("Comit Alllllllllllllllllllllllllllllllllll");
+//    			ZABHeader commitPending = new ZABHeader(ZABHeader.COMMITOUTSTANDINGREQUESTS);
+//				for (Address address : zabMembers) {
+//                    Message commitALL = new Message(address).putHeader(this.idd, commitPending);
+//            		down_prot.down(new Event(Event.MSG, commitALL));     
+//                }
+//				makeAllFollowersAck=true;
+//				
+//				//startSending=false;
+//			}
+//			
+//		}
+//	}
     @Override
     public void stop() {
         running=false;
@@ -136,12 +127,8 @@ public class MMZAB extends Protocol {
         switch(evt.getType()) {
             case Event.MSG:
                 Message msg=(Message)evt.getArg();
-                handleClientRequest(msg);
-                hdr=(ZABHeader)msg.getHeader(this.id);
-    			log.info(is_leader+" Start---------------------------------------------- _timer");
-                if((hdr.getType()==ZABHeader.START_SENDING) && is_leader){
-        			
-            	}
+               // hdr=(ZABHeader)msg.getHeader(this.id);
+                handleClientRequest(msg);               
                 return null; // don't pass down
             case Event.SET_LOCAL_ADDRESS:
                 local_addr=(Address)evt.getArg();
@@ -163,31 +150,45 @@ public class MMZAB extends Protocol {
                 }
                 switch(hdr.getType()) {                
                     case ZABHeader.START_SENDING:
-                    	return up_prot.up(new Event(Event.MSG, msg));
+//                    	if(zabMembers.contains(local_addr)){
+//                			//log.info("$$$$$$$$$$$$$$$$$ initiale startSending and makeAllFollowersAck = false");
+//                			startSending=false;
+//                			makeAllFollowersAck=false;
+//                    	}
+//                    	else
+                    		return up_prot.up(new Event(Event.MSG, msg));
                 	case ZABHeader.REQUEST:
                 		forwardToLeader(msg);
                 		break;
                     case ZABHeader.FORWARD:
                     	
-                    	log.info("Start--------------------------------------------------- _timer");
-                    	_timer = new Timer();
-        				_timer.scheduleAtFixedRate(new FinishTask(this.id), 200, 200);
-                    	lastRequestRecieved = System.currentTimeMillis();
+                    	//log.info("Start--------------------------------------------------- _timer");
+//                    	if (!startSending){
+//	                    	_timer = new Timer();
+//	        				_timer.scheduleAtFixedRate(new FinishTask(this.id), 200, 200);
+//	                    	startSending=true;
+//                    	}
+                    	//lastRequestRecieved = System.currentTimeMillis();
                 		queuedMessages.add(hdr);
                 		break;
                     case ZABHeader.PROPOSAL:
 	                   	if (!is_leader){
-	            			sendACK(msg);
+	            			sendACK(hdr.getMessageId());
 	            		}
 	                   	break;           		
                     case ZABHeader.ACK:
                 			processACK(msg, msg.getSrc());
                 		break;
-                    case ZABHeader.COMMITOUTSTANDINGREQUESTS:
-                    	makeAllFollowersAck=true;
-            			commitPendingRequest();
+                    case ZABHeader.BUNDLED_MESSAGE:
+	                   	if (!is_leader){
+	            			preparForAck(hdr);
+	            		}
+	                   	break;  
+                   // case ZABHeader.COMMITOUTSTANDINGREQUESTS:
+                    	//makeAllFollowersAck=true;
+            			//commitPendingRequest();
             			//startSending = false;
-            		break;
+            		//break;
                     case ZABHeader.RESPONSE:
                     	handleOrderingResponse(hdr);
                     	
@@ -226,15 +227,15 @@ public class MMZAB extends Protocol {
     private void handleClientRequest(Message message){
     	ZABHeader clientHeader = ((ZABHeader) message.getHeader(this.id));
     	if (clientHeader!=null && clientHeader.getType() == ZABHeader.START_SENDING){
-    		ackActiveForAll=false;
-        	makeAllFollowersAck=false;
-        	
+
     		for (Address client : view.getMembers()){
-    	 	    log.info("Address to check " + client);
-        		if (!zabMembers.contains(client)){
-        	 	    log.info("Address to check is not zab Members, will send start request to" + client+ " "+ getCurrentTimeStamp());
-        			message.setDest(client);
-        	        down_prot.down(new Event(Event.MSG, message));    	
+ 			   if (log.isInfoEnabled())
+ 				   log.info("Address to check " + client);
+        	   if (!zabMembers.contains(client)){
+				   if (log.isInfoEnabled())
+	        	 	    log.info("Address to check is not zab Members, will send start request to" + client+ " "+ getCurrentTimeStamp());
+	        		message.setDest(client);
+	        	    down_prot.down(new Event(Event.MSG, message));    	
         		}
         		
     	}
@@ -311,16 +312,26 @@ public class MMZAB extends Protocol {
       
     }
     
-
-    private void sendACK(Message msg){
+    
+    private void preparForAck(ZABHeader zabHeader){
+    	Collection<MessageId> msgIds = zabHeader.getBundledMsgId();
+    	for (MessageId id : msgIds){
+    		//if (log.isInfoEnabled())
+        		//log.info("messageId = " + id);
+        	
+    		sendACK(id);  	
+    	}
+    }
+    
+    private void sendACK(MessageId id){
     	Proposal p;
-    	if (msg == null )
+    	if (id == null )
     		return;
     	
-    	ZABHeader hdr = (ZABHeader) msg.getHeader(this.id);
+    	//ZABHeader hdr = (ZABHeader) msg.getHeader(this.id);
     	
-    	if (hdr == null)
-    		return;
+//    	if (hdr == null)
+//    		return;
     	
 //    	if (hdr.getZxid() != lastZxidProposed + 1){
 //            log.info("Got zxid 0x"
@@ -334,10 +345,11 @@ public class MMZAB extends Protocol {
 //		if (!(outstandingProposals.containsKey(hdr.getZxid()))){
 			p = new Proposal();
 			p.AckCount++; // Ack from leader
-			p.setZxid(hdr.getZxid());
-			outstandingProposals.put(hdr.getZxid(), p);
-			lastZxidProposed = hdr.getZxid();
-			queuedProposalMessage.put(hdr.getZxid(), hdr);
+			p.setZxid(id.getZxid());
+			outstandingProposals.put(id.getZxid(), p);
+			lastZxidProposed = id.getZxid();
+			ZABHeader hdr = new ZABHeader(ZABHeader.PROPOSAL, id.getZxid(), id);
+			queuedProposalMessage.put(id.getZxid(), hdr);
 //		}
 //		else{
 //			p = outstandingProposals.get(hdr.getZxid());
@@ -346,15 +358,16 @@ public class MMZAB extends Protocol {
 //			lastZxidProposed = hdr.getZxid();
 
 		//}
-		if (ZUtil.SendAckOrNoSend() || makeAllFollowersAck) {
+		if (ZUtil.SendAckOrNoSend()){// || makeAllFollowersAck) {
 //			log.info("["
 //					+ local_addr
 //					+ "] "
 //					+ "follower, sending ack if (ZUtil.SendAckOrNoSend()) (sendAck) at "+getCurrentTimeStamp());
-
-			ZABHeader hdrACK = new ZABHeader(ZABHeader.ACK, hdr.getZxid());
+			//if(makeAllFollowersAck)
+				//log.info("*********** makeAllFollowersAck Probability not working "+(++countACKNoProb));
+			ZABHeader hdrACK = new ZABHeader(ZABHeader.ACK, id.getZxid());
 			Message ackMessage = new Message().putHeader(this.id, hdrACK);
-			log.info("Sending ACK for " + hdr.getZxid()+" "+getCurrentTimeStamp());
+			//log.info("Sending ACK for " + hdr.getZxid()+" "+getCurrentTimeStamp());
 			//notACK.put(hdr.getZxid(), true);
 
 			try{
@@ -376,7 +389,6 @@ public class MMZAB extends Protocol {
     
     
     private synchronized void processACK(Message msgACK, Address sender){
-    	boolean check4LessZxid=false, check4LessZxidFound=false;
 	    Proposal p = null;
     	ZABHeader hdr = (ZABHeader) msgACK.getHeader(this.id);	
     	long ackZxid = hdr.getZxid();
@@ -390,59 +402,59 @@ public class MMZAB extends Protocol {
  	    //log.info("recieved ack "+ackZxid+" "+ sender + " "+getCurrentTimeStamp());
 
 		if (lastZxidCommitted >= ackZxid) {
-            if (log.isDebugEnabled()) {
+            //if (log.isDebugEnabled()) {
                // log.info("proposal has already been committed, pzxid: 0x{} zxid: 0x{}",
                         //lastZxidCommitted, ackZxid);
-            }
+            //}
             return;
         }
         p = outstandingProposals.get(ackZxid);
         if (p == null) {
-            log.info("*********************Trying to commit future proposal: zxid 0x{} from {}",
-                    Long.toHexString(ackZxid), sender);
+            //log.info("*********************Trying to commit future proposal: zxid 0x{} from {}",
+                   // Long.toHexString(ackZxid), sender);
             return;
         }
 		
 		p.AckCount++;
-		if (log.isDebugEnabled()) {
+		//if (log.isDebugEnabled()) {
 //            log.debug("Count for zxid: " +
 //                    Long.toHexString(ackZxid)+" = "+ p.getAckCount());
-        }
+        //}
 		
-		if(isQuorum(p.getAckCount())){
-			if(isFirstZxid(ackZxid)){
+		if(isQuorum(p.getAckCount()) && isFirstZxid(ackZxid)){
+			//if(isFirstZxid(ackZxid)){
 				//log.info("RRRRRR Reach Q and First "+ ackZxid);
-				outstandingProposals.remove(ackZxid);
-	            commit(ackZxid);  	
-			}
-			else{
-				for (Proposal proposalPending : outstandingProposals.values()){
-	        		if (proposalPending.getZxid() < p.getZxid()){
+            commit(ackZxid);  	
+		    outstandingProposals.remove(ackZxid);
+		}
+//			else{
+//				for (Proposal proposalPending : outstandingProposals.values()){
+//	        		if (proposalPending.getZxid() < p.getZxid()){
 
 //        				log.info("KKKKK Zxid <  "+proposalPending.getZxid()+ " "+getCurrentTimeStamp());
 //        				log.info("KKKKK Time dif "+(System.currentTimeMillis() - proposalPending.getRequestCreated()));
 	        			//if(isQuorum(proposalPending.getAckCount())){
-	        				wantCommit.add(proposalPending.getZxid());
+	        				//wantCommit.add(proposalPending.getZxid());
 	        			//}
 	        			//else if ((System.currentTimeMillis() - proposalPending.getRequestCreated()) > 3){
 	    				   //log.info("KKKKKKKKKKKKKKKKKK putting zxid in wantCommit "+proposalPending.getZxid()+ " "+getCurrentTimeStamp());
 	        				//wantCommit.add(proposalPending.getZxid());
      	        			//outstandingProposals.remove(proposalPending.getZxid());
 	        			//}
-	        		}
-				}
-					wantCommit.add(ackZxid);					
+//	        		}
+//				}
+//					wantCommit.add(ackZxid);					
 //					log.info("Before kkkk  outstandingProposals "+outstandingProposals.keySet());
 //					log.info("Before KKKk  wantCommit "+wantCommit+" Main one "+ackZxid+" "+getCurrentTimeStamp());
 	     			//outstandingProposals.remove(ackZxid);
-					for (long zx:wantCommit){
-						if (isFirstZxid(zx)){
-							commit(zx);
-							outstandingProposals.remove(zx);							
-						}
-						else
-							break;
-					}
+//					for (long zx:wantCommit){
+//						if (isFirstZxid(zx)){
+//							commit(zx);
+//							outstandingProposals.remove(zx);							
+//						}
+//						else
+//							break;
+//					}
 					//log.info("After kkkkkkkkkkKKKKKK print outstandingProposals "+outstandingProposals.keySet()+" Main one "+ackZxid+ " "+getCurrentTimeStamp());
 					
 						
@@ -451,10 +463,9 @@ public class MMZAB extends Protocol {
 //					for (long zx:wantCommit)
 //						commit(zx);
 				//}
-			}
-			wantCommit.clear();
-			
-		}
+//			}
+//			wantCommit.clear();
+//		}
 	        			
 			
 		}
@@ -465,11 +476,11 @@ public class MMZAB extends Protocol {
 	    	for (Proposal proposalPending : outstandingProposals.values()){
 	    		wantCommit.add(proposalPending.getZxid());
 	    	}
-			log.info("Before Finished outstandingProposals "+outstandingProposals.keySet());
-			log.info("Before Finished wantCommit "+wantCommit);
+			//log.info("Before Finished outstandingProposals "+outstandingProposals.keySet());
+			//log.info("Before Finished wantCommit "+wantCommit);
 	
 			for (long zx:wantCommit){
-				log.info("Commiting "+outstandingProposals.keySet());
+				//log.info("Commiting "+outstandingProposals.keySet());
 					commit(zx);
 					outstandingProposals.remove(zx);
 				}
@@ -491,16 +502,18 @@ public class MMZAB extends Protocol {
 	    	   synchronized(this){
 	    	       lastZxidCommitted = zxid;
 	    	   }
+	    	   
 		   hdrOrginal = queuedProposalMessage.get(zxid);
 		   if (hdrOrginal == null){
-			   log.info("!!!!!!!!!!!!!!!!!!!!!!!!!!!! Header is null (commit)"+ hdrOrginal + " for zxid "+zxid);
+			   if (log.isInfoEnabled())
+				   log.info("!!!!!!!!!!!!!!!!!!!!!!!!!!!! Header is null (commit)"+ hdrOrginal + " for zxid "+zxid);
 			   return;
 		   }
    	       MessageId mid = hdrOrginal.getMessageId();
-		   if (mid == null){
-			   log.info("!!!!!!!!!!!!!!!!!!!!!!!!!!!! Message is null (commit)"+ mid + " for zxid "+zxid);
-			   return;
-		   }
+//		   if (mid == null){
+//			   log.info("!!!!!!!!!!!!!!!!!!!!!!!!!!!! Message is null (commit)"+ mid + " for zxid "+zxid);
+//			   return;
+//		   }
 	       ZABHeader hdrCommit = new ZABHeader(ZABHeader.COMMIT, zxid, mid);
 	       Message commitMessage = new Message().putHeader(this.id, hdrCommit);
 	       commitMessage.src(local_addr);
@@ -516,12 +529,14 @@ public class MMZAB extends Protocol {
 
 	    	ZABHeader hdrOrginal = queuedProposalMessage.remove(zxid);
 	    	if (hdrOrginal == null) {
-				log.info("$$$$$$$$$$$$$$$$$$$$$ Header is null (deliver)"
+				 if (log.isInfoEnabled())
+					 log.info("$$$$$$$$$$$$$$$$$$$$$ Header is null (deliver)"
 						+ hdrOrginal + " for zxid " + hdr.getZxid());
 				return;
 			}
 	    	queuedCommitMessage.put(zxid, hdrOrginal);
-			 log.info("queuedCommitMessage size = " + queuedCommitMessage.size() + " zxid "+zxid+" "+getCurrentTimeStamp());
+			   if (log.isInfoEnabled())
+					log.info("queuedCommitMessage size = " + queuedCommitMessage.size() + " zxid "+zxid);
 
 	    	if (requestQueue.contains(hdrOrginal.getMessageId())){
 	    		//log.info("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!I am the zab request receiver, going to send response back to " + hdrOrginal.getMessageId().getAddress());
@@ -581,96 +596,124 @@ public class MMZAB extends Protocol {
 /* ----------------------------- End of Private Methods -------------------------------- */
    
 
- final class FollowerMessageHandler implements Runnable {
-    	
-    	private short id;
-    	public FollowerMessageHandler(short id){
-    		this.id = id;
-    	}
-    	
-    	@Override
-        public void run() {
-                handleRequests();         
-        }
-    	
-    	/**
-         * create a proposal and send it out to all the members
-         * 
-         * @param message
-         */
-    	
-        private void handleRequests() {
-        	ZABHeader hdrReq = null;
-        	boolean test = false;
-            while (running) {
-            	//if (queuedMessages.peek()!=null){
-            
-                	 try {
-                		 
-                		 //log.info("Queue Size "+queuedMessages.size()+" "+getCurrentTimeStamp());
-                		 //if ((hdrReq=queuedMessages.poll(30, TimeUnit.MILLISECONDS))==null){
-                			// if (test){
-//	                			 log.info("WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW Reach 30M");
-//	                			 ZABHeader commitPending = new ZABHeader(ZABHeader.COMMITOUTSTANDINGREQUESTS);
-//	                			 
-//	                			 for (Address address : zabMembers) {
-//	                                 Message commitALL = new Message(address).putHeader(this.id, commitPending);
-//	                         		down_prot.down(new Event(Event.MSG, commitALL));     
-//	                             }
-//                			 }
-//                			 
-//                		 }
-//                		 if(hdrReq!=null){
-//                   		     test =true;
-//                		 }
-                		 hdrReq=queuedMessages.take();
-					} catch (InterruptedException e) {
-						// TODO Auto-generated catch block
-						e.printStackTrace();
+		final class FollowerMessageHandler implements Runnable {
+	    	
+	    	private short id;
+	    	public FollowerMessageHandler(short id){
+	    		this.id = id;
+	    	}
+	    	
+	    	public void createProposal(ZABHeader zabHeader){
+	    		try{
+	    		long new_zxid = getNewZxid();
+	    		MessageId id = zabHeader.getMessageId();
+	    		id.setZxid(new_zxid);
+				ZABHeader hdrProposal = new ZABHeader(ZABHeader.PROPOSAL,
+						new_zxid, id);
+				Message ProposalMessage = new Message().putHeader(this.id,
+						hdrProposal);
+
+				ProposalMessage.setSrc(local_addr);
+				Proposal p = new Proposal();
+				p.setMessageId(zabHeader.getMessageId());
+				p.AckCount++;
+				outstandingProposals.put(new_zxid, p);
+				queuedProposalMessage.put(new_zxid, hdrProposal);
+				lastZxidProposed=new_zxid;
+
+				for (Address address : zabMembers) {
+					if (address.equals(leader))
+						continue;
+					Message cpy = ProposalMessage.copy();
+					cpy.setDest(address);
+					down_prot.down(new Event(Event.MSG, cpy));
+				}
+			} catch (Exception ex) {
+				log.error("failed proposing message to members");
+			}
+
+	    		
+	    	}
+	    	
+	    	public MessageId createProposals(ZABHeader zabHeader){
+	       		long new_zxid = getNewZxid();
+	       		MessageId mid = zabHeader.getMessageId();
+	       		mid.setZxid(new_zxid);
+	       		ZABHeader hdrProposal = new ZABHeader(ZABHeader.PROPOSAL,
+						new_zxid, mid);
+				//Message ProposalMessage = new Message().putHeader(this.id,
+						//hdrProposal);
+				//ProposalMessage.setSrc(local_addr);
+				Proposal p = new Proposal();
+				p.setMessageId(zabHeader.getMessageId());
+				p.AckCount++;
+				outstandingProposals.put(new_zxid, p);
+				queuedProposalMessage.put(new_zxid, hdrProposal);
+				lastZxidProposed=new_zxid;
+				return mid;
+	    		
+	    	}
+	    	
+	    	public void  broadcastProposals(Collection<MessageId> requests){
+	    		ZABHeader hdrProposal = new ZABHeader(ZABHeader.BUNDLED_MESSAGE,
+	    				requests); 		
+				Message ProposalMessage = new Message().putHeader(this.id,
+						hdrProposal);
+				ProposalMessage.setSrc(local_addr);
+				
+				for (Address address : zabMembers) {
+					if (address.equals(leader))
+						continue;
+					Message cpy = ProposalMessage.copy();
+					cpy.setDest(address);
+					down_prot.down(new Event(Event.MSG, cpy));
+				}
+	    		
+	    	}
+	    	
+	    	/**
+	         * create a proposal and send it out to all the members
+	         * 
+	         * @param message
+	         */
+	    	@Override
+	        public void run() {
+	                handleRequests();         
+	        }
+	  
+	        public void handleRequests() {
+	        	ZABHeader hdrReq = null;
+				while (running) {
+
+					try {
+						hdrReq = queuedMessages.take();
+						
+						if (BUNDLE_MSGS) {
+	                        int bundleSize = 0;
+	                        if (queuedMessages.isEmpty()) {
+	                            createProposal(hdrReq);
+	                        } else {
+	                            List<MessageId> requests = new ArrayList<MessageId>();
+	                            requests.add(createProposals(hdrReq));
+	                            while ((hdrReq = queuedMessages.peek()) != null && (bundleSize + hdrReq.size()) < MSG_SIZE) {
+	                                queuedMessages.poll(); // Just removes header. Peek necessary because of the size check
+	                                //MessageId msgId = hdrReq.getMessageId();
+	                                MessageId id =  createProposals(hdrReq);
+	                                bundleSize += id.serializedSize();
+	                                requests.add(id);
+	                                //log.info("Budle size ====== " + bundleSize);
+	                            }
+	                            broadcastProposals(requests);
+	                        }
+	                    } else {
+	                    	 createProposal(hdrReq);
+	                    }
+					} catch (Exception ex) {
+						log.error("failed proposing message to members");
 					}
-                 
-            	
-                
-            	long new_zxid = getNewZxid();
-            	ZABHeader hdrProposal = new ZABHeader(ZABHeader.PROPOSAL, new_zxid, hdrReq.getMessageId());                
-                Message ProposalMessage=new Message().putHeader(this.id, hdrProposal);
+				}
+	        }
 
-                ProposalMessage.setSrc(local_addr);
-            	Proposal p = new Proposal();
-            	p.setMessageId(hdrReq.getMessageId());
-            	p.setZxid(new_zxid);
-            	p.AckCount++;
-            	lastZxidProposed=new_zxid;
-            	
-            	
-            	//log.info("Zxid count for zxid = " + new_zxid + " count = "  +p.AckCount+" "+getCurrentTimeStamp());
-            	outstandingProposals.put(new_zxid, p);
-            	queuedProposalMessage.put(new_zxid, hdrProposal);
-            	
-            	
-            	
-            	try{
-            		
-            		//log.info("[" + local_addr + "] "+" prepar for proposal (run) for zxid="+new_zxid+" "+getCurrentTimeStamp());
+		}
 
-                 	//log.info("Leader is about to sent a proposal " + ProposalMessage);
-                 	for (Address address : zabMembers) {
-                        if(address.equals(leader))
-                        	continue;  
-                        Message cpy = ProposalMessage.copy();
-                        cpy.setDest(address);
-                		down_prot.down(new Event(Event.MSG, cpy));     
-                    }
-                 }catch(Exception ex) {
-            		log.error("failed proposing message to members");
-            	}    
-            	
-            
-            }
-            
-        }
-
-       
-    }
-
-}
+	}
