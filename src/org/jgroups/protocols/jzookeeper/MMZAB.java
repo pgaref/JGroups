@@ -33,7 +33,7 @@ import org.jgroups.annotations.ManagedAttribute;
 import org.jgroups.stack.Protocol;
 import org.jgroups.util.MessageBatch;
 /*
- * 
+ * Modify of ZAB
  * 
  */
 public class MMZAB extends Protocol {
