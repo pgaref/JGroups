@@ -126,7 +126,7 @@ public class ClientThread extends ReceiverAdapter {
 				// " has finished "+msgReceived+" ops");
 				msgReceived++;
 				//notify send thread
-				//isSend = false;
+				isSend = false;
 				latencies.add((System.currentTimeMillis() - message.getStartTime()));
 				// if (startReset) {
 				// st = System.currentTimeMillis();
@@ -135,13 +135,13 @@ public class ClientThread extends ReceiverAdapter {
 				//System.out.println(sender.getName() + " "
 				//		+ "Time interval -----> "
 				//		+ (System.currentTimeMillis() - st));
-				if ((System.currentTimeMillis() - st) > 50) {
+				//if ((System.currentTimeMillis() - st) > 50) {
 					//System.out.println("senter " + sender.getName()
 					//		+ " has finished " + msgReceived + " ops");
-					ZABTestThreads.finishedopsSoFar(msgReceived, sender);
-					st = System.currentTimeMillis();
+					//ZABTestThreads.finishedopsSoFar(msgReceived, sender);
+					//st = System.currentTimeMillis();
 					// startReset = true;
-				}
+				//}
 				//System.out.println(sender.getName() + " "
 				//		+ "msgReceived / numsMsg -----> " + msgReceived + " / "
 				//		+ numsMsg);
@@ -207,10 +207,10 @@ public class ClientThread extends ReceiverAdapter {
 					msg.putHeader(ID, hdrReq);
 					System.out.println("sender " + this.getName()+ " Sending " + i + " out of " + num_msgsPerThreads);
 					channel.send(msg);
-					//isSend = true;
-					//while (isSend){
+					isSend = true;
+					while (isSend){
 						//wait until notify
-					//}
+					}
 
 				} catch (Exception e) {
 				}
