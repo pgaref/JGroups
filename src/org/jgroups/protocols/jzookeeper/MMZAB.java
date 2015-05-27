@@ -90,47 +90,48 @@ public class MMZAB extends Protocol {
     }
     // For sending Dummy request
     
-    class FinishTask extends TimerTask {
-    	private short idd;
-    	public FinishTask(short id){
-    		this.idd = id;
-    	}
-		@Override
-		public void run() {
-			//this can be used to measure rate of each thread
-			//at this moment, it is not necessary
-			//log.info("cccccccall FinishTask diff time "+(currentTime - timeDiff));
-//			if (outstandingProposals.isEmpty()){
-//				this.cancel();
-//				return;
+//    class FinishTask extends TimerTask {
+//    	private short idd;
+//    	public FinishTask(short id){
+//    		this.idd = id;
+//    	}
+//		@Override
+//		public void run() {
+//			//this can be used to measure rate of each thread
+//			//at this moment, it is not necessary
+//			 current = System.currentTimeMillis();
+//			//log.info("cccccccall FinishTask diff time "+(currentTime - timeDiff));
+////			if (outstandingProposals.isEmpty()){
+////				this.cancel();
+////				return;
+////			}
+////			if ((currentTime - lastRequestRecieved) > 1000){
+////				this.cancel();
+////				return;
+////			}
+//			
+//
+//        	if ((current - lastTimeQueueChecked) > 20 
+//        		   	 && (current -laslAckRecieved) > 20
+//                     && (current - lastRequestRecieved) > 20
+//                     && !outstandingProposals.isEmpty()){
+//        		//if (log.isInfoEnabled()){
+//			//if (!outstandingProposals.isEmpty() && (currentTime - lastRequestRecieved) >500) {
+//        		this.cancel();
+//        		if (log.isInfoEnabled())
+//        			log.info("Comit Alllllllllllllllllllllllllllllllllll");
+//    			ZABHeader commitPending = new ZABHeader(ZABHeader.COMMITOUTSTANDINGREQUESTS);
+//				for (Address address : zabMembers) {
+//                    Message commitALL = new Message(address).putHeader(this.idd, commitPending);
+//            		down_prot.down(new Event(Event.MSG, commitALL));     
+//                }
+//				//makeAllFollowersAck=true;
+//				
+//				startSending=false;
 //			}
-//			if ((currentTime - lastRequestRecieved) > 1000){
-//				this.cancel();
-//				return;
-//			}
-			
-			 current = System.currentTimeMillis();
-
-        	if ((current -laslAckRecieved) > 50
-                     && (current - lastRequestRecieved) > 50
-                     && !outstandingProposals.isEmpty()){
-        		//if (log.isInfoEnabled()){
-			//if (!outstandingProposals.isEmpty() && (currentTime - lastRequestRecieved) >500) {
-        		this.cancel();
-        		if (log.isInfoEnabled())
-        			log.info("Comit Alllllllllllllllllllllllllllllllllll");
-    			ZABHeader commitPending = new ZABHeader(ZABHeader.COMMITOUTSTANDINGREQUESTS);
-				for (Address address : zabMembers) {
-                    Message commitALL = new Message(address).putHeader(this.idd, commitPending);
-            		down_prot.down(new Event(Event.MSG, commitALL));     
-                }
-				//makeAllFollowersAck=true;
-				
-				startSending=false;
-			}
-			
-		}
-	}
+//			
+//		}
+//	}
     @Override
     public void stop() {
         running=false;
@@ -181,11 +182,11 @@ public class MMZAB extends Protocol {
                     	lastRequestRecieved=System.currentTimeMillis();
                     	recievedFirstRequest = true;
                     	//log.info("Start--------------------------------------------------- _timer");
-                    	if (!startSending){
-	                    	_timer = new Timer();
-	        				_timer.scheduleAtFixedRate(new FinishTask(this.id), 200, 200);
-	                    	startSending=true;
-                    	}
+//                    	if (!startSending){
+//	                    	_timer = new Timer();
+//	        				_timer.scheduleAtFixedRate(new FinishTask(this.id), 200, 200);
+//	                    	startSending=true;
+//                    	}
                     	//lastRequestRecieved = System.currentTimeMillis();
                 		queuedMessages.add(hdr);
                 		break;
@@ -426,33 +427,33 @@ public class MMZAB extends Protocol {
 //                    Long.toHexString(ackZxid)+" = "+ p.getAckCount());
         //}
 		
-		if (isQuorum(p.getAckCount())) {
-			if (ackZxid == lastZxidCommitted+1){
+		if (isQuorum(p.getAckCount()) && isFirstZxid(ackZxid)) {
+			//if (ackZxid == lastZxidCommitted+1){
 				commit(ackZxid);
 				outstandingProposals.remove(ackZxid);				
-			//}
+		}
 			//if (isFirstZxid(ackZxid)) {
 				//log.info(" if (isQuorum(p.getAckCount())) commiting " + ackZxid);
 				//commit(ackZxid);
 				//outstandingProposals.remove(ackZxid);
-			} else {
-				long zxidCommiting = lastZxidCommitted +1;
-				for (long z = zxidCommiting; z < ackZxid+1; z++){
-					commit(z);
-					outstandingProposals.remove(z);
-				}
-			}
-				//for (Proposal proposalPending : outstandingProposals.values()) {
-					//if (proposalPending.getZxid() < p.getZxid()) {
-						//log.info(" inside proposalPending.getZxid() < p.getZxid() "
-								//+ proposalPending.getZxid() + " " + p.getZxid());
-						//wantCommit.add(proposalPending.getZxid());
-						//log.info(" wantCommit size " + wantCommit.size());
-					//}
-				//}
-				//wantCommit.add(ackZxid);
-				
-//				log.info(" processAck Commiting allwantCommit) commiting " + wantCommit + " before "+ackZxid);
+			//} else {
+//				long zxidCommiting = lastZxidCommitted +1;
+//				for (long z = zxidCommiting; z < ackZxid+1; z++){
+//					commit(z);
+//					outstandingProposals.remove(z);
+//				}
+////			}
+//				for (Proposal proposalPending : outstandingProposals.values()) {
+//					if (proposalPending.getZxid() < p.getZxid()) {
+//						//log.info(" inside proposalPending.getZxid() < p.getZxid() "
+//								//+ proposalPending.getZxid() + " " + p.getZxid());
+//						wantCommit.add(proposalPending.getZxid());
+//						//log.info(" wantCommit size " + wantCommit.size());
+//					}
+//				}
+//				wantCommit.add(ackZxid);
+//				
+////				log.info(" processAck Commiting allwantCommit) commiting " + wantCommit + " before "+ackZxid);
 //				for (long zx : wantCommit) {
 //					if (isFirstZxid(zx)) {
 //						commit(zx);
@@ -462,8 +463,8 @@ public class MMZAB extends Protocol {
 //						break;
 //				}
 //				wantCommit.clear();
-//			}
-		}
+////			}
+//		}
 		
 		// }
 
